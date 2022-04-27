@@ -73,6 +73,10 @@ class CUTModel(BaseModel):
 
         # define networks (both generator and discriminator)
         self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.normG, not opt.no_dropout, opt.init_type, opt.init_gain, opt.no_antialias, opt.no_antialias_up, self.gpu_ids, opt)
+        # for i, layer in enumerate(self.netG.model):
+        #     print(i,layer)
+        # with open('cunet.txt', 'w') as f:
+        #     print(self.netG, file=f)
         self.netF = networks.define_F(opt.input_nc, opt.netF, opt.normG, not opt.no_dropout, opt.init_type, opt.init_gain, opt.no_antialias, self.gpu_ids, opt)
 
         if self.isTrain:
@@ -197,12 +201,12 @@ class CUTModel(BaseModel):
 
     def calculate_NCE_loss(self, src, tgt):
         n_layers = len(self.nce_layers)
-        feat_q = self.netG(tgt, self.nce_layers, encode_only=True)
+        feat_q = self.netG(tgt, encode_only=True)
 
         if self.opt.flip_equivariance and self.flipped_for_equivariance:
             feat_q = [torch.flip(fq, [3]) for fq in feat_q]
 
-        feat_k = self.netG(src, self.nce_layers, encode_only=True)
+        feat_k = self.netG(src, encode_only=True)
         feat_k_pool, sample_ids = self.netF(feat_k, self.opt.num_patches, None)
         feat_q_pool, _ = self.netF(feat_q, self.opt.num_patches, sample_ids)
 

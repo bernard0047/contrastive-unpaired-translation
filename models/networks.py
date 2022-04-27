@@ -6,7 +6,10 @@ import functools
 from torch.optim import lr_scheduler
 import numpy as np
 from .stylegan_networks import StyleGAN2Discriminator, StyleGAN2Generator, TileStyleGAN2Discriminator
-
+from fastai.vision import models
+from fastai.layers import NormType
+from torchvision.models.feature_extraction import create_feature_extractor
+from .custom_unet import CustomUnet
 ###############################################################################
 # Helper Functions
 ###############################################################################
@@ -264,10 +267,50 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         n_blocks = 8
         net = G_Resnet(input_nc, output_nc, opt.nz, num_downs=2, n_res=n_blocks - 4, ngf=ngf, norm='inst', nl_layer='relu')
     else:
-        raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
+        net = CustomUnet()
     return init_net(net, init_type, init_gain, gpu_ids, initialize_weights=('stylegan2' not in netG))
 
+'''
+class CustomUnet(nn.Module):
+    def __init__(self, output_nc=3, opt=None):
+        super().__init__()
+        self.opt = opt
+        m = models.xresnet.xse_resnext34(pretrained=True)
+        m = nn.Sequential(*list(m.children())[:-4])
+        self.model = models.unet.DynamicUnet(
+            m, output_nc, (1024, 1024), blur=True, norm_type=NormType.Spectral, self_attention=True, y_range=(-2.0, 2.0))
+        layer_ids = ['0.0']
+        return_nodes = {x: f'feat{i}' for i, x in enumerate(layer_ids)}
+        self.feats = create_feature_extractor(self.model, return_nodes=return_nodes)
+        self.feats.requires_grad_(False)
 
+    def forward(self, input, encode_only=False):
+        if encode_only:
+            return self.feats(input)
+        # if -1 in layers:
+        #     layers.append(len(self.model))
+        # if len(layers) > 0:
+        #     feat = input
+        #     feats = []
+        #     for layer_id, layer in enumerate(self.model):
+        #         # print(layer_id, layer)
+        #         feat = layer(feat)
+        #         if layer_id in layers:
+        #             # print("%d: adding the output of %s %d" % (layer_id, layer.__class__.__name__, feat.size(1)))
+        #             feats.append(feat)
+        #         else:
+        #             # print("%d: skipping %s %d" % (layer_id, layer.__class__.__name__, feat.size(1)))
+        #             pass
+        #         if layer_id == layers[-1] and encode_only:
+        #             # print('encoder only return features')
+        #             return feats  # return intermediate features alone; stop in the last layers
+
+        #     return feat, feats  # return both output and intermediate features
+        else:
+            """Standard forward"""
+            fake = self.model(input)
+            return fake
+'''
 def define_F(input_nc, netF, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, no_antialias=False, gpu_ids=[], opt=None):
     if netF == 'global_pool':
         net = PoolingF()
